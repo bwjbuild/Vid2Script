@@ -37,7 +37,7 @@ where curl >nul 2>nul
 if errorlevel 1 (
     echo.
     echo [ERROR] curl was not found on this machine.
-    echo Please install curl (or use Windows 10/11 with built-in curl) and retry.
+    echo Please install curl or use Windows 10/11 with built-in curl and retry.
     goto :fail
 )
 
