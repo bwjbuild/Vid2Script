@@ -2,6 +2,8 @@
 
 **Video → MP3 converter. Drag a file, get a 128 kbps MP3.**
 
+[View on GitHub](https://github.com/bwjbuild/Vid2Script)
+
 Part of the Vid2Script transcript generation pipeline: video file → MP3 audio → transcription.
 
 ## First-Time Setup
