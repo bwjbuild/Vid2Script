@@ -1,105 +1,109 @@
 @echo off
-echo.
-echo Vid2Script Setup — downloading required tools...
-echo.
+setlocal EnableExtensions EnableDelayedExpansion
+title Vid2Script - Setup
 
-set PYTHON_ZIP=python-3.12.8-embed-amd64.zip
-set PYTHON_URL=https://www.nic.funet.fi/pub/misc/python.org/ Distributions/python-3.12.8/python-3.12.8-embed-amd64.zip
-set PYTHON_URL_ALT=https://www.python.org/ftp/python/3.12.8/python-3.12.8-embed-amd64.zip
-set FFMPEG_URL=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
+set "NO_PAUSE=0"
+if /I "%~1"=="--no-pause" set "NO_PAUSE=1"
 
 set "SCRIPT_DIR=%~dp0"
-set "PYTHON_DIR=%SCRIPT_DIR%python"
+cd /d "%SCRIPT_DIR%"
+
 set "FFMPEG_DIR=%SCRIPT_DIR%ffmpeg"
-set "PYTHON_ZIP_PATH=%SCRIPT_DIR%%PYTHON_ZIP%"
+set "OUTPUT_DIR=%SCRIPT_DIR%output"
+set "LOG_DIR=%SCRIPT_DIR%logs"
 
-:: ── Check if already set up ──────────────────────────────────────────────────
-if exist "%PYTHON_DIR%\python.exe" (
-    if exist "%FFMPEG_DIR%\ffmpeg.exe" (
-        echo Python and FFmpeg are already set up.
-        echo Run vid2script.bat to start!
-        echo.
-        pause
-        exit /b 0
-    )
-)
+set "FFMPEG_URL=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+set "TMP_ZIP=%TEMP%\vid2script_ffmpeg.zip"
+set "TMP_DIR=%TEMP%\vid2script_ffmpeg_extract"
 
-:: ── Download Python Embeddable ───────────────────────────────────────────────
-echo Downloading Python 3.12 (Embeddable)...
-echo This may take a minute...
 echo.
-curl -L -o "%PYTHON_ZIP_PATH%" "%PYTHON_URL%" 2>nul
-if not exist "%PYTHON_ZIP_PATH%" (
-    echo First URL failed, trying alternate...
-    curl -L -o "%PYTHON_ZIP_PATH%" "%PYTHON_URL_ALT%" 2>nul
-)
-
-if not exist "%PYTHON_ZIP_PATH%" (
-    echo.
-    echo [FAILED] Could not download Python.
-    echo Please download manually:
-    echo   %PYTHON_URL_ALT%
-    echo.
-    echo Save the ZIP next to this SETUP.bat, then run SETUP.bat again.
-    echo.
-    pause
-    exit /b 1
-)
-
-echo Extracting Python...
-powershell -Command "Expand-Archive -Force '%PYTHON_ZIP_PATH%' '%SCRIPT_DIR%'"
-del /f "%PYTHON_ZIP_PATH%" 2>nul
-
-:: Remove python312._pth restriction to allow imports
-set "PTH_FILE=%PYTHON_DIR%\python312._pth"
-if exist "%PTH_FILE%" (
-    powershell -Command "(Get-Content '%PTH_FILE%') -replace '#import site', 'import site' | Set-Content '%PTH_FILE%'"
-)
-
-:: ── Download FFmpeg ──────────────────────────────────────────────────────────
+echo ============================================================
+echo  Vid2Script Setup
+echo ============================================================
 echo.
-echo Downloading FFmpeg (this may take a few minutes...)...
-echo.
-curl -L -o "%SCRIPT_DIR%ffmpeg.zip" "%FFMPEG_URL%" 2>nul
 
-if not exist "%SCRIPT_DIR%ffmpeg.zip" (
-    echo.
-    echo [FAILED] Could not download FFmpeg.
-    echo Please download manually:
-    echo   %FFMPEG_URL%
-    echo.
-    echo Save the ZIP next to this SETUP.bat, then run SETUP.bat again.
-    echo.
-    pause
-    exit /b 1
+echo [1/4] Preparing folders...
+if not exist "%FFMPEG_DIR%" mkdir "%FFMPEG_DIR%"
+if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
+if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
+
+if exist "%FFMPEG_DIR%\ffmpeg.exe" if exist "%FFMPEG_DIR%\ffprobe.exe" (
+    echo [OK] FFmpeg already present.
+    goto :success
 )
 
-echo Extracting FFmpeg...
-powershell -Command "Expand-Archive -Force '%SCRIPT_DIR%ffmpeg.zip' '%SCRIPT_DIR%ffmpeg_extract'"
-:: Move ffmpeg.exe from nested folder to ffmpeg/
-for /r "%SCRIPT_DIR%ffmpeg_extract" %%f in (ffmpeg.exe) do (
-    if exist "%%f" (
-        move /y "%%f" "%FFMPEG_DIR%\ffmpeg.exe" >nul
-    )
+echo [2/4] Checking curl availability...
+where curl >nul 2>nul
+if errorlevel 1 (
+    echo.
+    echo [ERROR] curl was not found on this machine.
+    echo Please install curl (or use Windows 10/11 with built-in curl) and retry.
+    goto :fail
 )
-rmdir /s /q "%SCRIPT_DIR%ffmpeg_extract" 2>nul
-del /f "%SCRIPT_DIR%ffmpeg.zip" 2>nul
 
-:: ── Done ────────────────────────────────────────────────────────────────────
-echo.
-if exist "%PYTHON_DIR%\python.exe" (
-    if exist "%FFMPEG_DIR%\ffmpeg.exe" (
-        echo [OK] Python ready!
-        echo [OK] FFmpeg ready!
-        echo.
-        echo Setup complete! Run vid2script.bat to start.
-    ) else (
-        echo [WARNING] FFmpeg not found. Please extract ffmpeg.exe to:
-        echo   %FFMPEG_DIR%
-    )
-) else (
-    echo [WARNING] Python not found. Please extract Python to:
-    echo   %PYTHON_DIR%
+echo [3/4] Downloading FFmpeg...
+curl -L --fail --retry 3 --retry-delay 2 -o "%TMP_ZIP%" "%FFMPEG_URL%"
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Failed to download FFmpeg.
+    echo URL: %FFMPEG_URL%
+    goto :fail
 )
+
+echo [4/4] Extracting FFmpeg binaries...
+if exist "%TMP_DIR%" rmdir /s /q "%TMP_DIR%" >nul 2>nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Path '%TMP_ZIP%' -DestinationPath '%TMP_DIR%' -Force"
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Failed to extract FFmpeg archive.
+    goto :cleanup_fail
+)
+
+for /r "%TMP_DIR%" %%f in (ffmpeg.exe) do copy /y "%%f" "%FFMPEG_DIR%\ffmpeg.exe" >nul
+for /r "%TMP_DIR%" %%f in (ffprobe.exe) do copy /y "%%f" "%FFMPEG_DIR%\ffprobe.exe" >nul
+
+if not exist "%FFMPEG_DIR%\ffmpeg.exe" (
+    echo.
+    echo [ERROR] ffmpeg.exe was not found after extraction.
+    goto :cleanup_fail
+)
+
+if not exist "%FFMPEG_DIR%\ffprobe.exe" (
+    echo.
+    echo [ERROR] ffprobe.exe was not found after extraction.
+    goto :cleanup_fail
+)
+
+goto :cleanup_success
+
+:cleanup_success
+if exist "%TMP_ZIP%" del /f /q "%TMP_ZIP%" >nul 2>nul
+if exist "%TMP_DIR%" rmdir /s /q "%TMP_DIR%" >nul 2>nul
+goto :success
+
+:cleanup_fail
+if exist "%TMP_ZIP%" del /f /q "%TMP_ZIP%" >nul 2>nul
+if exist "%TMP_DIR%" rmdir /s /q "%TMP_DIR%" >nul 2>nul
+goto :fail
+
+:success
 echo.
+echo [SUCCESS] Setup complete.
+echo FFmpeg binaries:
+echo   %FFMPEG_DIR%\ffmpeg.exe
+echo   %FFMPEG_DIR%\ffprobe.exe
+set "EXIT_CODE=0"
+goto :done
+
+:fail
+set "EXIT_CODE=1"
+
+echo.
+echo Setup failed.
+
+goto :done
+
+:done
+if "%NO_PAUSE%"=="1" exit /b %EXIT_CODE%
 pause
+exit /b %EXIT_CODE%

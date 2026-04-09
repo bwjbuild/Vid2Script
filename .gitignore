@@ -1,21 +1,27 @@
-# Byte-compiled / optimized / DLL files
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Output
+# Runtime output
 output/
 logs/
 
-# Bundled dependencies (downloaded on first run)
-python/
+# Downloaded binaries / extracted payloads
 ffmpeg/
+ffmpeg_extract/
+python/
+*.zip
 
-# OS
+# Build artifacts
+build/
+dist/
+.venv-build/
+*.spec.bak
+
+# OS/editor
 .DS_Store
 Thumbs.db
-
-# Editor
 .vscode/
 .idea/
 *.swp
@@ -24,6 +30,3 @@ Thumbs.db
 # Logs
 *.log
 npm-debug.log*
-
-# Git
-.git/

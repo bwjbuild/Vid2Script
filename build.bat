@@ -1,89 +1,89 @@
 @echo off
-title Vid2Script — Build
+setlocal EnableExtensions
+title Vid2Script - Build
 
-echo.
-echo ============================================================
-echo  Vid2Script .exe Builder
-echo ============================================================
-echo.
-echo  This script will:
-echo    1. Check for ffmpeg/
-echo    2. Install PyInstaller if needed
-echo    3. Build the Vid2Script.exe
-echo    4. Done!
-echo.
+set "NO_PAUSE=0"
+if /I "%~1"=="--no-pause" set "NO_PAUSE=1"
 
 set "SCRIPT_DIR=%~dp0"
 cd /d "%SCRIPT_DIR%"
 
-:: ── Check FFmpeg ──────────────────────────────────────────────
-if not exist "ffmpeg\ffmpeg.exe" (
-    echo.
-    echo [ERROR] FFmpeg not found.
-    echo.
-    echo   Please run SETUP.bat FIRST to download FFmpeg,
-    echo   then run this build.bat again.
-    echo.
-    pause
-    exit /b 1
-)
-
-echo [OK] FFmpeg found
-echo.
-
-:: ── Install PyInstaller ───────────────────────────────────────
-echo Installing PyInstaller...
-echo.
-
-:: Check if pip is available
-where pip >nul 2>nul
-if %ERRORLEVEL% neq 0 (
-    echo Installing pip first...
-    python -m ensurepip --default-pip 2>nul
-)
-
-python -m pip install pyinstaller --quiet --upgrade 2>nul
-
-if %ERRORLEVEL% neq 0 (
-    echo.
-    echo [ERROR] Failed to install PyInstaller.
-    echo   Run:  pip install pyinstaller
-    echo   Then re-run this build.bat
-    echo.
-    pause
-    exit /b 1
-)
-
-echo [OK] PyInstaller ready
-echo.
-
-:: ── Build ─────────────────────────────────────────────────────
-echo Building Vid2Script.exe ...
-echo.
-
-:: Clean old builds
-if exist "build\"   rmdir /s /q "build"   2>nul
-if exist "dist\"    rmdir /s /q "dist"    2>nul
-
-pyinstaller vid2script.spec --noconfirm --clean
-
-if %ERRORLEVEL% neq 0 (
-    echo.
-    echo [ERROR] Build failed. Check the error messages above.
-    echo.
-    pause
-    exit /b 1
-)
-
 echo.
 echo ============================================================
-echo  [SUCCESS] Build complete!
+echo  Vid2Script Windows Build
 echo ============================================================
 echo.
-echo   Your .exe is at:
-echo   dist\Vid2Script\Vid2Script.exe
+
+call "%SCRIPT_DIR%SETUP.bat" --no-pause
+if errorlevel 1 goto :fail
+
+set "BOOTSTRAP_PY="
+where py >nul 2>nul
+if %ERRORLEVEL%==0 (
+    py -3.12 -c "import sys" >nul 2>nul
+    if %ERRORLEVEL%==0 set "BOOTSTRAP_PY=py -3.12"
+)
+
+if not defined BOOTSTRAP_PY (
+    where python >nul 2>nul
+    if %ERRORLEVEL%==0 set "BOOTSTRAP_PY=python"
+)
+
+if not defined BOOTSTRAP_PY (
+    echo [ERROR] Python 3.10+ not found.
+    echo Install Python from https://www.python.org/downloads/windows/ and retry.
+    goto :fail
+)
+
+%BOOTSTRAP_PY% -c "import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)"
+if errorlevel 1 (
+    echo [ERROR] Python 3.10+ is required.
+    goto :fail
+)
+
+if not exist ".venv-build\Scripts\python.exe" (
+    echo Creating build virtual environment...
+    %BOOTSTRAP_PY% -m venv .venv-build
+    if errorlevel 1 goto :fail
+)
+
+set "PYTHON=.venv-build\Scripts\python.exe"
+
+echo Installing build dependencies...
+%PYTHON% -m pip install --upgrade pip
+if errorlevel 1 goto :fail
+%PYTHON% -m pip install -r requirements-build.txt
+if errorlevel 1 goto :fail
+
+if exist "build" rmdir /s /q "build"
+if exist "dist" rmdir /s /q "dist"
+
+echo Building single-file EXE...
+%PYTHON% -m PyInstaller vid2script.spec --noconfirm --clean
+if errorlevel 1 goto :fail
+
+if not exist "dist\Vid2Script.exe" (
+    echo [ERROR] Build output not found: dist\Vid2Script.exe
+    goto :fail
+)
+
 echo.
-echo   Copy the entire dist\Vid2Script\ folder and share it.
-echo   (FFmpeg is bundled inside — no installation needed)
+echo [SUCCESS] Build completed.
+echo EXE path:
+echo   dist\Vid2Script.exe
 echo.
+echo You can share this single EXE directly.
+set "EXIT_CODE=0"
+goto :done
+
+:fail
+set "EXIT_CODE=1"
+echo.
+echo Build failed.
+
+goto :done
+
+:done
+if "%NO_PAUSE%"=="1" exit /b %EXIT_CODE%
 pause
+exit /b %EXIT_CODE%

@@ -1,0 +1,36 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run setup (FFmpeg)
+        shell: cmd
+        run: SETUP.bat --no-pause
+
+      - name: Build EXE
+        shell: cmd
+        run: build.bat --no-pause
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vid2Script-windows-exe
+          path: dist/Vid2Script.exe
+          if-no-files-found: error

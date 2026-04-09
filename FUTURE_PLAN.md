@@ -1,36 +1,29 @@
-# Vid2Script — Future Plan
+# Vid2Script - Future Plan
 
-## v1 — GUI .exe (current)
-- [x] Tkinter GUI with Pick File + Convert buttons
-- [x] Progress indicator during conversion
-- [x] Output folder opens automatically on completion
-- [x] Bundled FFmpeg (no PATH needed)
-- [x] PyInstaller packaging → single .exe
-- [x] build.bat one-click build script
-- [ ] Test on Windows (pending)
+## v1 - Windows MVP (current)
+- [x] Tkinter desktop UI
+- [x] YouTube URL -> MP3 (128 kbps)
+- [x] Local video file -> MP3 (128 kbps)
+- [x] Bundled FFmpeg for frozen build
+- [x] Single-file PyInstaller build (`dist/Vid2Script.exe`)
+- [x] Startup checks + runtime logs
 
-## v2 — Windows .exe polish
-- [ ] Add file drag-and-drop onto the window
-- [ ] Show file size and duration before conversion
+## v2 - Quality of Life
+- [ ] Drag-and-drop local files
+- [ ] Better progress details (download speed, ETA, post-process step)
 - [ ] Cancel button during conversion
-- [ ] Remember last-used output folder
+- [ ] Remember last output folder and mode
 
-## v3 — Linux support
-- [ ] Detect apt/dnf and auto-install FFmpeg via package manager
-- [ ] Test on Ubuntu
-- [ ] Test on Fedora
+## v3 - Batch Workflow
+- [ ] Queue multiple URLs/files
+- [ ] Sequential conversion with per-item status
+- [ ] Summary report (success/failed/skipped)
 
-## v4 — macOS support
-- [ ] Detect Homebrew and auto-install FFmpeg
-- [ ] Test on Intel macOS
-- [ ] Test on Apple Silicon
+## v4 - Transcription Pipeline Integrations
+- [ ] Optional auto-naming convention for downstream pipeline
+- [ ] Auto-move output to watched folder
+- [ ] Optional webhook/command trigger after conversion
 
-## v5 — Batch conversion
-- [ ] Select multiple files from file picker
-- [ ] Convert all in sequence with progress bar
-- [ ] Show summary after batch completes
-
-## v6 — Configurable output
-- [ ] Allow user to choose bitrate (64 / 128 / 192 / 256 / 320 kbps)
-- [ ] Allow user to choose output folder
-- [ ] Optional WAV output
+## v5 - Cross-platform Packaging
+- [ ] Linux app build and validation
+- [ ] macOS app build and validation
