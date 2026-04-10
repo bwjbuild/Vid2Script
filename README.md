@@ -6,6 +6,13 @@ Windows-first converter for transcription pipelines.
 - Output: MP3 at 128 kbps stereo
 - UX goal: paste/click once, get MP3
 
+## Download (Recommended)
+
+- Latest release page: https://github.com/bwjbuild/Vid2Script/releases/latest
+- `v1.0.2` page: https://github.com/bwjbuild/Vid2Script/releases/tag/v1.0.2
+- Direct EXE (`v1.0.2`): https://github.com/bwjbuild/Vid2Script/releases/download/v1.0.2/Vid2Script.exe
+- SHA256 (`Vid2Script.exe`): `3f631c649b38b85a60bc04fb0e0dfbf23e8596796a5e91f1d63237feb41c66bb`
+
 ## What Was Fixed
 
 This version addresses the previous Windows packaging issue (`failed to load python dll`) by switching to a **single-file PyInstaller build**.
@@ -13,6 +20,7 @@ This version addresses the previous Windows packaging issue (`failed to load pyt
 - End users now receive one file: `Vid2Script.exe`
 - No Python installation is required on user machines
 - No dependency on users copying an entire `dist\Vid2Script\` folder
+- For YouTube anti-bot challenges, the app now retries using local browser cookies automatically
 
 ## End-User Usage (Windows)
 
@@ -90,11 +98,9 @@ requirements-build.txt # Build deps
 
 ### 2) YouTube conversion fails
 
-- Usually caused by upstream site/extractor changes.
-- Rebuild to pull latest `yt-dlp`:
-  ```bat
-  build.bat
-  ```
+- If you see `Sign in to confirm you're not a bot`, open YouTube in your browser first (while signed in), then retry in Vid2Script.
+- Vid2Script auto-retries with cookies from common browsers (`Edge`, `Chrome`, `Firefox`, `Brave`, `Chromium`, `Opera`, `Vivaldi`).
+- If it still fails, download the newest EXE from releases (contains latest bundled `yt-dlp`).
 
 ### 3) FFmpeg missing message in app
 
