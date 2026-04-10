@@ -33,6 +33,15 @@ SUPPORTED_EXTS = {
     ".mp4", ".mkv", ".avi", ".mov", ".webm",
     ".wmv", ".flv", ".m4v", ".mpg", ".mpeg", ".3gp",
 }
+YOUTUBE_COOKIE_BROWSER_RETRY_ORDER = (
+    "edge",
+    "chrome",
+    "firefox",
+    "brave",
+    "chromium",
+    "opera",
+    "vivaldi",
+)
 
 
 def get_app_dir() -> Path:
@@ -141,6 +150,18 @@ def format_file_size(path: Path) -> str:
     return f"{size} B"
 
 
+def _looks_like_youtube_auth_challenge(error_text: str) -> bool:
+    text = (error_text or "").lower()
+    triggers = (
+        "sign in to confirm you're not a bot",
+        "sign in to confirm you’re not a bot",
+        "use --cookies-from-browser",
+        "use --cookies for the authentication",
+        "youtube cookies",
+    )
+    return any(t in text for t in triggers)
+
+
 def convert_local_video(input_path: Path, output_dir: Path, progress_callback):
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = unique_output_path(output_dir / f"{input_path.stem}.mp3")
@@ -204,41 +225,88 @@ def convert_youtube_url(url: str, output_dir: Path, progress_callback):
         elif status == "finished":
             progress_callback("Download complete. Converting to 128 kbps MP3...")
 
-    ydl_opts = {
-        "format": "bestaudio/best",
-        "noplaylist": True,
-        "quiet": True,
-        "no_warnings": True,
-        "overwrites": True,
-        "windowsfilenames": True,
-        "ffmpeg_location": str(FFMPEG_DIR),
-        "paths": {"home": str(output_dir)},
-        "outtmpl": {"default": "%(title).180B [%(id)s].%(ext)s"},
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "128",
-            }
-        ],
-        "postprocessor_args": ["-ac", "2"],
-        "progress_hooks": [hook],
-        "cachedir": False,
-    }
+    def build_opts(cookie_browser: str | None = None) -> dict:
+        opts = {
+            "format": "bestaudio/best",
+            "noplaylist": True,
+            "quiet": True,
+            "no_warnings": True,
+            "overwrites": True,
+            "windowsfilenames": True,
+            "ffmpeg_location": str(FFMPEG_DIR),
+            "paths": {"home": str(output_dir)},
+            "outtmpl": {"default": "%(title).180B [%(id)s].%(ext)s"},
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "128",
+                }
+            ],
+            "postprocessor_args": ["-ac", "2"],
+            "progress_hooks": [hook],
+            "cachedir": False,
+            # Helps with some YouTube client-side restrictions.
+            "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
+        }
+        if cookie_browser:
+            opts["cookiesfrombrowser"] = (cookie_browser,)
+        return opts
 
     logging.info("Starting YouTube conversion: %s", url)
 
-    try:
+    def run_download(ydl_opts: dict) -> Path | None:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             prepared = Path(ydl.prepare_filename(info))
             candidate = prepared.with_suffix(".mp3")
             if candidate.exists():
-                logging.info("YouTube conversion finished: %s", candidate)
-                return True, f"Created {candidate.name} ({format_file_size(candidate)})", candidate
+                return candidate
+        return None
+
+    try:
+        candidate = run_download(build_opts())
+        if candidate and candidate.exists():
+            logging.info("YouTube conversion finished: %s", candidate)
+            return True, f"Created {candidate.name} ({format_file_size(candidate)})", candidate
     except Exception as exc:
-        logging.exception("YouTube conversion failed for %s", url)
-        return False, f"Download failed:\n{exc}", None
+        error_text = str(exc)
+        if not _looks_like_youtube_auth_challenge(error_text):
+            logging.exception("YouTube conversion failed for %s", url)
+            return False, f"Download failed:\n{exc}", None
+
+        logging.warning("YouTube auth challenge detected. Retrying with browser cookies.")
+        progress_callback("YouTube requested verification. Retrying with browser cookies...")
+
+        last_cookie_error = error_text
+        for browser in YOUTUBE_COOKIE_BROWSER_RETRY_ORDER:
+            try:
+                progress_callback(f"Retrying with {browser.title()} cookies...")
+                candidate = run_download(build_opts(cookie_browser=browser))
+                if candidate and candidate.exists():
+                    logging.info(
+                        "YouTube conversion finished with %s cookies: %s",
+                        browser,
+                        candidate,
+                    )
+                    return True, f"Created {candidate.name} ({format_file_size(candidate)})", candidate
+            except Exception as browser_exc:
+                last_cookie_error = str(browser_exc)
+                logging.warning(
+                    "YouTube retry with %s cookies failed: %s",
+                    browser,
+                    last_cookie_error,
+                )
+
+        help_text = (
+            "YouTube asked for sign-in verification and automatic browser-cookie retry failed.\n\n"
+            "Fix:\n"
+            "1. Open YouTube in Edge or Chrome\n"
+            "2. Sign in and play the target video once\n"
+            "3. Retry in Vid2Script\n\n"
+            f"Last error:\n{last_cookie_error}"
+        )
+        return False, help_text, None
 
     recent_mp3s = sorted(
         output_dir.glob("*.mp3"),
