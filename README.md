@@ -9,9 +9,9 @@ Windows-first converter for transcription pipelines.
 ## Download (Recommended)
 
 - Latest release page: https://github.com/bwjbuild/Vid2Script/releases/latest
-- `v1.0.2` page: https://github.com/bwjbuild/Vid2Script/releases/tag/v1.0.2
-- Direct EXE (`v1.0.2`): https://github.com/bwjbuild/Vid2Script/releases/download/v1.0.2/Vid2Script.exe
-- SHA256 (`Vid2Script.exe`): `3f631c649b38b85a60bc04fb0e0dfbf23e8596796a5e91f1d63237feb41c66bb`
+- `v1.0.3` page: https://github.com/bwjbuild/Vid2Script/releases/tag/v1.0.3
+- Direct EXE (`v1.0.3`): https://github.com/bwjbuild/Vid2Script/releases/download/v1.0.3/Vid2Script.exe
+- SHA256 (`Vid2Script.exe`): `0b9a5d21c081b3decc98db354699294daf47cd444d68e44673cb7da3b7f14157`
 
 ## What Was Fixed
 

@@ -44,6 +44,25 @@ YOUTUBE_COOKIE_BROWSER_RETRY_ORDER = (
 )
 
 
+def _is_probably_youtube_url(url: str) -> bool:
+    lowered = (url or "").lower()
+    return "youtube.com" in lowered or "youtu.be" in lowered
+
+
+def _cookie_profiles_for_browser(browser: str) -> tuple[str | None, ...]:
+    if browser in {"edge", "chrome", "brave", "chromium", "opera", "vivaldi"}:
+        return (None, "Default", "Profile 1", "Profile 2")
+    if browser == "firefox":
+        return (None, "default-release", "default")
+    return (None,)
+
+
+def _cookie_source_label(browser: str, profile: str | None) -> str:
+    if profile:
+        return f"{browser.title()} ({profile})"
+    return browser.title()
+
+
 def get_app_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
@@ -158,6 +177,12 @@ def _looks_like_youtube_auth_challenge(error_text: str) -> bool:
         "use --cookies-from-browser",
         "use --cookies for the authentication",
         "youtube cookies",
+        "use --cookies",
+        "this video is unavailable",
+        "http error 403",
+        "http error 429",
+        "too many requests",
+        "unavailable videos are hidden",
     )
     return any(t in text for t in triggers)
 
@@ -225,7 +250,7 @@ def convert_youtube_url(url: str, output_dir: Path, progress_callback):
         elif status == "finished":
             progress_callback("Download complete. Converting to 128 kbps MP3...")
 
-    def build_opts(cookie_browser: str | None = None) -> dict:
+    def build_opts(cookie_source: tuple | None = None) -> dict:
         opts = {
             "format": "bestaudio/best",
             "noplaylist": True,
@@ -249,8 +274,8 @@ def convert_youtube_url(url: str, output_dir: Path, progress_callback):
             # Helps with some YouTube client-side restrictions.
             "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
         }
-        if cookie_browser:
-            opts["cookiesfrombrowser"] = (cookie_browser,)
+        if cookie_source:
+            opts["cookiesfrombrowser"] = cookie_source
         return opts
 
     logging.info("Starting YouTube conversion: %s", url)
@@ -271,32 +296,39 @@ def convert_youtube_url(url: str, output_dir: Path, progress_callback):
             return True, f"Created {candidate.name} ({format_file_size(candidate)})", candidate
     except Exception as exc:
         error_text = str(exc)
-        if not _looks_like_youtube_auth_challenge(error_text):
+        should_try_cookie_retry = _looks_like_youtube_auth_challenge(error_text) or _is_probably_youtube_url(url)
+        if not should_try_cookie_retry:
             logging.exception("YouTube conversion failed for %s", url)
             return False, f"Download failed:\n{exc}", None
 
-        logging.warning("YouTube auth challenge detected. Retrying with browser cookies.")
-        progress_callback("YouTube requested verification. Retrying with browser cookies...")
+        logging.warning(
+            "YouTube download failed. Retrying with browser cookies. Initial error: %s",
+            error_text,
+        )
+        progress_callback("YouTube requested verification. Retrying with browser cookies and profiles...")
 
         last_cookie_error = error_text
         for browser in YOUTUBE_COOKIE_BROWSER_RETRY_ORDER:
-            try:
-                progress_callback(f"Retrying with {browser.title()} cookies...")
-                candidate = run_download(build_opts(cookie_browser=browser))
-                if candidate and candidate.exists():
-                    logging.info(
-                        "YouTube conversion finished with %s cookies: %s",
-                        browser,
-                        candidate,
+            for profile in _cookie_profiles_for_browser(browser):
+                label = _cookie_source_label(browser, profile)
+                cookie_source = (browser,) if profile is None else (browser, profile)
+                try:
+                    progress_callback(f"Retrying with {label} cookies...")
+                    candidate = run_download(build_opts(cookie_source=cookie_source))
+                    if candidate and candidate.exists():
+                        logging.info(
+                            "YouTube conversion finished with %s cookies: %s",
+                            label,
+                            candidate,
+                        )
+                        return True, f"Created {candidate.name} ({format_file_size(candidate)})", candidate
+                except Exception as browser_exc:
+                    last_cookie_error = str(browser_exc)
+                    logging.warning(
+                        "YouTube retry with %s cookies failed: %s",
+                        label,
+                        last_cookie_error,
                     )
-                    return True, f"Created {candidate.name} ({format_file_size(candidate)})", candidate
-            except Exception as browser_exc:
-                last_cookie_error = str(browser_exc)
-                logging.warning(
-                    "YouTube retry with %s cookies failed: %s",
-                    browser,
-                    last_cookie_error,
-                )
 
         help_text = (
             "YouTube asked for sign-in verification and automatic browser-cookie retry failed.\n\n"
