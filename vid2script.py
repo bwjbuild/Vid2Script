@@ -28,7 +28,7 @@ try:
 except ImportError:
     yt_dlp = None
 
-APP_TITLE = "Vid2Script"
+APP_TITLE = "Vid2Script v1.0.4"
 SUPPORTED_EXTS = {
     ".mp4", ".mkv", ".avi", ".mov", ".webm",
     ".wmv", ".flv", ".m4v", ".mpg", ".mpeg", ".3gp",
@@ -252,7 +252,7 @@ def convert_youtube_url(url: str, output_dir: Path, progress_callback):
 
     def build_opts(cookie_source: tuple | None = None) -> dict:
         opts = {
-            "format": "bestaudio/best",
+            "format": "bestaudio*",
             "noplaylist": True,
             "quiet": True,
             "no_warnings": True,
@@ -271,8 +271,10 @@ def convert_youtube_url(url: str, output_dir: Path, progress_callback):
             "postprocessor_args": ["-ac", "2"],
             "progress_hooks": [hook],
             "cachedir": False,
-            # Helps with some YouTube client-side restrictions.
-            "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
+            "extractor_retries": 3,
+            "file_access_retries": 3,
+            # Use web + ios clients (android triggers anti-bot more aggressively in 2026).
+            "extractor_args": {"youtube": {"player_client": ["web", "ios"]}},
         }
         if cookie_source:
             opts["cookiesfrombrowser"] = cookie_source
@@ -281,12 +283,14 @@ def convert_youtube_url(url: str, output_dir: Path, progress_callback):
     logging.info("Starting YouTube conversion: %s", url)
 
     def run_download(ydl_opts: dict) -> Path | None:
+        # Snapshot existing mp3s before download so we can detect the actual
+        # post-processed file, instead of guessing from prepare_filename().
+        before = set(output_dir.glob("*.mp3")) if output_dir.exists() else set()
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            prepared = Path(ydl.prepare_filename(info))
-            candidate = prepared.with_suffix(".mp3")
-            if candidate.exists():
-                return candidate
+            ydl.extract_info(url, download=True)
+            new_mp3s = set(output_dir.glob("*.mp3")) - before
+            if new_mp3s:
+                return max(new_mp3s, key=lambda p: p.stat().st_mtime)
         return None
 
     try:
@@ -296,7 +300,7 @@ def convert_youtube_url(url: str, output_dir: Path, progress_callback):
             return True, f"Created {candidate.name} ({format_file_size(candidate)})", candidate
     except Exception as exc:
         error_text = str(exc)
-        should_try_cookie_retry = _looks_like_youtube_auth_challenge(error_text) or _is_probably_youtube_url(url)
+        should_try_cookie_retry = _looks_like_youtube_auth_challenge(error_text)
         if not should_try_cookie_retry:
             logging.exception("YouTube conversion failed for %s", url)
             return False, f"Download failed:\n{exc}", None
