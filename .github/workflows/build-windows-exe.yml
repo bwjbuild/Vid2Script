@@ -6,6 +6,8 @@ on:
     branches:
       - main
       - master
+    tags:
+      - 'v*'
 
 jobs:
   build:
@@ -34,3 +36,26 @@ jobs:
           name: Vid2Script-windows-exe
           path: dist/Vid2Script.exe
           if-no-files-found: error
+
+      - name: Compute SHA256
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist\Vid2Script.exe -Algorithm SHA256).Hash.ToLower()
+          echo "SHA256=$hash" >> $env:GITHUB_ENV
+          echo "HASH=$hash" >> $env:GITHUB_ENV
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Vid2Script ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          body: |
+            Vid2Script ${{ github.ref_name }}
+
+            ## SHA256
+            ```
+            ${{ env.HASH }}
+            ```
+          files: dist/Vid2Script.exe
+          generate_release_notes: true
